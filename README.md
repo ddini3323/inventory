@@ -79,11 +79,11 @@ node --env-file=.env.local lifecycle-test.js
 
 ## How expiry works
 
-**Primary — Vercel Cron:** `vercel.json` schedules `GET /api/cron/expire` every 2 minutes. The route is authenticated via `Authorization: Bearer $CRON_SECRET`. It finds all `PENDING` reservations where `expiresAt < NOW()`, atomically decrements `reservedUnits`, and marks each `RELEASED` — in a per-row transaction so concurrent cron runs are safe.
+**Primary — lazy cleanup on reads:** `GET /api/products` calls `releaseExpiredReservations()` before returning data. Every time the product listing is viewed, any expired PENDING reservations are released and stock is restored. This means expiry is effectively real-time — it resolves the moment the next user loads the page.
 
-**Secondary — lazy cleanup on reads:** `GET /api/products` calls the same `releaseExpiredReservations()` helper before returning data. Stock counts are always accurate when shown to a user, even if the cron hasn't fired yet.
+**Secondary — Vercel Cron (hourly):** `vercel.json` schedules `GET /api/cron/expire` once per hour as a safety net. The route is authenticated via `Authorization: Bearer $CRON_SECRET`. It catches any reservations that expired between page loads (e.g. if no one visits the site for a while).
 
-**Why not a background worker?** Vercel serverless doesn't support persistent processes. Cron + lazy-read gives sub-2-minute staleness at zero infra cost.
+**Why not a background worker?** Vercel serverless doesn't support persistent processes. Lazy-read gives immediate cleanup on every page load; the hourly cron is a backstop for idle periods.
 
 ---
 
