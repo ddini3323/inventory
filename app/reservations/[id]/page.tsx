@@ -1,13 +1,31 @@
 import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import ReservationClient from "./ReservationClient";
 
 async function getReservation(id: string) {
-  const base = process.env.NEXT_PUBLIC_APP_URL
-    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-  const res = await fetch(`${base}/api/reservations/${id}`, { cache: "no-store" });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error("Failed to fetch reservation");
-  return res.json();
+  const r = await prisma.reservation.findUnique({
+    where: { id },
+    include: {
+      product: { select: { name: true, sku: true, price: true, imageUrl: true } },
+      warehouse: { select: { name: true, location: true } },
+    },
+  });
+  if (!r) return null;
+  return {
+    id: r.id,
+    quantity: r.quantity,
+    status: r.status as "PENDING" | "CONFIRMED" | "RELEASED",
+    expiresAt: r.expiresAt.toISOString(),
+    confirmedAt: r.confirmedAt?.toISOString() ?? null,
+    releasedAt: r.releasedAt?.toISOString() ?? null,
+    product: {
+      name: r.product.name,
+      sku: r.product.sku,
+      price: Number(r.product.price),
+      imageUrl: r.product.imageUrl,
+    },
+    warehouse: { name: r.warehouse.name, location: r.warehouse.location },
+  };
 }
 
 export default async function ReservationPage({ params }: { params: Promise<{ id: string }> }) {
