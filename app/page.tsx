@@ -4,7 +4,8 @@ type StockEntry = { warehouseId: string; warehouseName: string; warehouseLocatio
 type Product = { id: string; name: string; sku: string; description: string | null; price: number; imageUrl: string | null; stock: StockEntry[] };
 
 async function getProducts(): Promise<Product[]> {
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const base = process.env.NEXT_PUBLIC_APP_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   const res = await fetch(`${base}/api/products`, { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch products");
   return res.json();
