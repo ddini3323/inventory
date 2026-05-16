@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import ReservationClient from "./ReservationClient";
 
+export const dynamic = "force-dynamic";
+
 async function getReservation(id: string) {
   const r = await prisma.reservation.findUnique({
     where: { id },

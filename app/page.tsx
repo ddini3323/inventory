@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { releaseExpiredReservations } from "@/lib/expiry";
 import ProductList from "./components/ProductList";
 
+export const dynamic = "force-dynamic";
+
 type StockEntry = { warehouseId: string; warehouseName: string; warehouseLocation: string; available: number; total: number; reserved: number };
 type Product = { id: string; name: string; sku: string; description: string | null; price: number; imageUrl: string | null; stock: StockEntry[] };
 
