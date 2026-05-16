@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ikey = req.headers.get("Idempotency-Key");
-  if (ikey) {
+  if (ikey && redis) {
     const cached = await redis.get<object>(`idempotency:confirm:${ikey}`);
     if (cached) return NextResponse.json(cached, { headers: { "Idempotency-Replayed": "true" } });
   }
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       `;
       return tx.reservation.update({ where: { id }, data: { status: "CONFIRMED", confirmedAt: new Date() },
         include: { product: true, warehouse: true } });
-    });
+    }, { maxWait: 20000, timeout: 30000 });
   } catch (err: unknown) {
     const e = err as { code?: string; status?: string };
     if (e.code === "NOT_FOUND") return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
@@ -37,6 +37,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     confirmedAt: reservation.confirmedAt?.toISOString(),
     product: { name: reservation.product.name, sku: reservation.product.sku },
     warehouse: { name: reservation.warehouse.name }, quantity: reservation.quantity };
-  if (ikey) await redis.set(`idempotency:confirm:${ikey}`, body, { ex: IDEMPOTENCY_TTL });
+  if (ikey && redis) await redis.set(`idempotency:confirm:${ikey}`, body, { ex: IDEMPOTENCY_TTL });
   return NextResponse.json(body);
 }

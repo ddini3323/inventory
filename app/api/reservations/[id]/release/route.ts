@@ -17,7 +17,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       `;
       return tx.reservation.update({ where: { id }, data: { status: "RELEASED", releasedAt: new Date() },
         include: { product: true, warehouse: true } });
-    });
+    }, { maxWait: 20000, timeout: 30000 });
   } catch (err: unknown) {
     const e = err as { code?: string; status?: string };
     if (e.code === "NOT_FOUND") return NextResponse.json({ error: "Reservation not found" }, { status: 404 });

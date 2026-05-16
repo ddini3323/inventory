@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Validation failed" }, { status: 422 });
   const { productId, warehouseId, quantity } = parsed.data;
   const ikey = req.headers.get("Idempotency-Key");
-  if (ikey) {
+  if (ikey && redis) {
     const cached = await redis.get<object>(`idempotency:${ikey}`);
     if (cached) return NextResponse.json(cached, { status: 200, headers: { "Idempotency-Replayed": "true" } });
   }
@@ -19,17 +19,17 @@ export async function POST(req: NextRequest) {
   try {
     reservation = await prisma.$transaction(async (tx) => {
       const updated = await tx.$executeRaw`
-        UPDATE \"Inventory\"
-        SET \"reservedUnits\" = \"reservedUnits\" + ${quantity}
-        WHERE \"productId\"   = ${productId}
-          AND \"warehouseId\" = ${warehouseId}
-          AND (\"totalUnits\" - \"reservedUnits\") >= ${quantity}
+        UPDATE "Inventory"
+        SET "reservedUnits" = "reservedUnits" + ${quantity}
+        WHERE "productId"   = ${productId}
+          AND "warehouseId" = ${warehouseId}
+          AND ("totalUnits" - "reservedUnits") >= ${quantity}
       `;
       if (Number(updated) === 0) throw Object.assign(new Error("No stock"), { code: "INSUFFICIENT_STOCK" });
       return tx.reservation.create({ data: { productId, warehouseId, quantity, status: "PENDING",
         expiresAt: new Date(Date.now() + RESERVATION_TTL_MS), idempotencyKey: ikey ?? undefined },
         include: { product: true, warehouse: true } });
-    });
+    }, { maxWait: 20000, timeout: 30000 });
   } catch (err: unknown) {
     const e = err as { code?: string };
     if (e.code === "INSUFFICIENT_STOCK") return NextResponse.json({ error: "Not enough stock." }, { status: 409 });
@@ -41,6 +41,6 @@ export async function POST(req: NextRequest) {
     createdAt: reservation.createdAt.toISOString(),
     product: { name: reservation.product.name, sku: reservation.product.sku, price: Number(reservation.product.price) },
     warehouse: { name: reservation.warehouse.name, location: reservation.warehouse.location } };
-  if (ikey) await redis.set(`idempotency:${ikey}`, rb, { ex: IDEMPOTENCY_TTL });
+  if (ikey && redis) await redis.set(`idempotency:${ikey}`, rb, { ex: IDEMPOTENCY_TTL });
   return NextResponse.json(rb, { status: 201 });
 }
